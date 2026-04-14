@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lottie Player</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50:  '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#1e1b4b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* Drop zone active */
+        .drop-active {
+            border-color: #6366f1 !important;
+            background-color: rgba(99,102,241,0.08) !important;
+        }
+
+        /* Custom range slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 9999px;
+            outline: none;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #6366f1;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #6366f1;
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        input[type=range]::-moz-range-thumb {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #6366f1;
+            border: 2px solid white;
+            cursor: pointer;
+        }
+
+        /* Progress bar */
+        #progress-track {
+            background: linear-gradient(to right, #6366f1 var(--prog, 0%), transparent var(--prog, 0%));
+        }
+        .dark #progress-track {
+            background: linear-gradient(to right, #818cf8 var(--prog, 0%), transparent var(--prog, 0%));
+        }
+
+        /* Speed track */
+        #speed-range {
+            background: linear-gradient(to right, #6366f1 var(--spd, 50%), transparent var(--spd, 50%));
+        }
+        .dark #speed-range {
+            background: linear-gradient(to right, #818cf8 var(--spd, 50%), transparent var(--spd, 50%));
+        }
+
+        /* Lottie container */
+        #lottie-container svg { width: 100% !important; height: 100% !important; }
+
+        /* Toggle switch */
+        .toggle-track { transition: background 0.25s; }
+        .toggle-thumb { transition: transform 0.25s; }
+
+        /* Control button */
+        .ctrl-btn {
+            transition: background 0.15s, transform 0.1s, color 0.15s;
+        }
+        .ctrl-btn:active { transform: scale(0.93); }
+
+        /* Fade animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+        /* Placeholder pulse */
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+        .animate-pulse { animation: pulse 2s cubic-bezier(.4,0,.6,1) infinite; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb { background: #4338ca; }
+
+        /* Glass card */
+        .glass {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300">
+
+<!-- HEADER -->
+<div class="w-full max-w-2xl flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+        <span class="text-brand-500 text-xl"><i class="fa-solid fa-film"></i></span>
+        <span class="font-bold text-lg tracking-tight text-gray-900 dark:text-white">LottiePlayer</span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-400 font-medium">v1.0</span>
+    </div>
+
+    <!-- Dark mode toggle -->
+    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <i class="fa-solid fa-sun text-amber-400 text-sm"></i>
+        <button id="theme-toggle" aria-label="Toggle dark mode"
+                class="relative w-12 h-6 toggle-track rounded-full bg-gray-300 dark:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-1">
+        <span id="toggle-thumb"
+              class="toggle-thumb absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-xs">
+        </span>
+        </button>
+        <i class="fa-solid fa-moon text-brand-400 text-sm"></i>
+    </div>
+</div>
+
+<!-- MAIN CARD -->
+<div class="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-3xl shadow-xl dark:shadow-gray-950/60 overflow-hidden border border-gray-200 dark:border-gray-700">
+
+    <!-- ANIMATION VIEWPORT -->
+    <div class="relative bg-gray-50 dark:bg-gray-800" style="min-height: 320px;">
+
+        <!-- Drop zone (shown when no animation loaded) -->
+        <div id="drop-zone"
+             class="absolute inset-0 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-none cursor-pointer transition-all duration-200 z-10"
+             onclick="document.getElementById('file-input').click()">
+            <div class="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center text-brand-400 text-3xl animate-pulse">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <div class="text-center">
+                <p class="font-semibold text-gray-700 dark:text-gray-200 text-base">Drop your Lottie file here</p>
+                <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">or click to browse &mdash; <span class="text-brand-500">.json</span> files only</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-600 mt-1">
+                <span><i class="fa-solid fa-file-code mr-1"></i>Lottie JSON</span>
+                <span><i class="fa-solid fa-weight-hanging mr-1"></i>Any size</span>
+                <span><i class="fa-solid fa-bolt mr-1"></i>Instant play</span>
+            </div>
+        </div>
+
+        <!-- Lottie render target -->
+        <div id="lottie-container" class="w-full hidden fade-in" style="height: 320px;"></div>
+
+        <!-- File name badge -->
+        <div id="file-badge" class="hidden absolute top-3 left-3 z-20">
+        <span class="glass text-xs font-medium px-3 py-1.5 rounded-full bg-white/80 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-file-code text-brand-400 text-xs"></i>
+          <span id="file-name-text">animation.json</span>
+        </span>
+        </div>
+
+        <!-- Change file button (shown when animation loaded) -->
+        <button id="change-btn"
+                class="hidden absolute top-3 right-3 z-20 text-xs glass px-3 py-1.5 rounded-full bg-white/80 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:text-brand-500 dark:hover:text-brand-400 transition-colors shadow"
+                onclick="document.getElementById('file-input').click()">
+            <i class="fa-solid fa-arrow-up-from-bracket mr-1"></i>Change
+        </button>
+
+        <!-- Loop indicator -->
+        <div id="loop-badge" class="hidden absolute bottom-3 right-3 z-20">
+        <span id="loop-badge-inner" class="glass text-xs font-medium px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <i class="fa-solid fa-rotate text-brand-400"></i> Loop
+        </span>
+        </div>
+    </div>
+
+    <!-- PROGRESS BAR -->
+    <div class="px-5 pt-4 pb-1">
+        <div class="relative flex items-center gap-3">
+            <span id="time-current" class="text-xs text-gray-400 dark:text-gray-500 w-10 text-right tabular-nums shrink-0">0:00</span>
+            <div class="flex-1 relative h-6 flex items-center">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div id="progress-fill" class="h-full bg-brand-500 dark:bg-brand-400 rounded-full transition-none" style="width:0%"></div>
+                    </div>
+                </div>
+                <input id="progress-range" type="range" min="0" max="100" value="0" step="0.1"
+                       class="absolute inset-0 w-full opacity-0 h-full cursor-pointer"
+                       oninput="seekAnimation(this.value)" />
+            </div>
+            <span id="time-total" class="text-xs text-gray-400 dark:text-gray-500 w-10 tabular-nums shrink-0">0:00</span>
+        </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="px-5 py-4 flex flex-col gap-4">
+
+        <!-- Playback controls row -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+
+                <!-- Rewind -->
+                <button onclick="stepAnimation(-10)" title="Rewind 10 frames"
+                        class="ctrl-btn w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-brand-500 dark:hover:text-brand-400 text-sm">
+                    <i class="fa-solid fa-backward-step"></i>
+                </button>
+
+                <!-- Play/Pause -->
+                <button id="play-btn" onclick="togglePlayPause()" title="Play / Pause"
+                        class="ctrl-btn w-12 h-12 rounded-2xl flex items-center justify-center bg-brand-500 hover:bg-brand-600 dark:bg-brand-600 dark:hover:bg-brand-700 text-white shadow-md shadow-brand-500/30 dark:shadow-brand-700/30 text-lg transition-colors">
+                    <i id="play-icon" class="fa-solid fa-play"></i>
+                </button>
+
+                <!-- Forward -->
+                <button onclick="stepAnimation(10)" title="Forward 10 frames"
+                        class="ctrl-btn w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-brand-500 dark:hover:text-brand-400 text-sm">
+                    <i class="fa-solid fa-forward-step"></i>
+                </button>
+
+                <!-- Stop -->
+                <button onclick="stopAnimation()" title="Stop"
+                        class="ctrl-btn w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-brand-500 dark:hover:text-brand-400 text-sm ml-1">
+                    <i class="fa-solid fa-stop"></i>
+                </button>
+
+                <!-- Loop toggle -->
+                <button id="loop-btn" onclick="toggleLoop()" title="Toggle loop"
+                        class="ctrl-btn w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-brand-500 dark:hover:text-brand-400 text-sm ml-1">
+                    <i class="fa-solid fa-rotate"></i>
+                </button>
+            </div>
+
+            <!-- Frame info -->
+            <div class="flex items-center gap-2">
+                <div class="text-right">
+                    <p class="text-xs text-gray-400 dark:text-gray-500">Frame</p>
+                    <p id="frame-display" class="text-sm font-semibold text-gray-700 dark:text-gray-200 tabular-nums leading-none">—</p>
+                </div>
+                <div class="w-px h-8 bg-gray-200 dark:bg-gray-700"></div>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400 dark:text-gray-500">Total</p>
+                    <p id="total-display" class="text-sm font-semibold text-gray-700 dark:text-gray-200 tabular-nums leading-none">—</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Speed control -->
+        <div class="bg-gray-50 dark:bg-gray-800/60 rounded-2xl px-4 py-3 border border-gray-100 dark:border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                    <i class="fa-solid fa-gauge-high text-brand-400 text-xs"></i>
+                    Playback speed
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="setSpeed(0.5)" class="text-xs px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-brand-400 hover:text-brand-500 transition-colors">0.5×</button>
+                    <button onclick="setSpeed(1)"   class="text-xs px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-brand-400 hover:text-brand-500 transition-colors">1×</button>
+                    <button onclick="setSpeed(1.5)" class="text-xs px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-brand-400 hover:text-brand-500 transition-colors">1.5×</button>
+                    <button onclick="setSpeed(2)"   class="text-xs px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-brand-400 hover:text-brand-500 transition-colors">2×</button>
+                    <span id="speed-label" class="w-9 text-center font-semibold text-brand-500 dark:text-brand-400 text-sm tabular-nums">1.0×</span>
+                </div>
+            </div>
+            <div class="relative">
+                <div class="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden absolute top-1/2 -translate-y-1/2 pointer-events-none">
+                    <div id="speed-fill" class="h-full bg-brand-500 dark:bg-brand-400 rounded-full" style="width:25%"></div>
+                </div>
+                <input id="speed-range" type="range" min="0.1" max="4" value="1" step="0.05"
+                       class="relative w-full opacity-0 h-6 cursor-pointer"
+                       oninput="setSpeed(parseFloat(this.value))" />
+            </div>
+        </div>
+
+        <!-- Open file row -->
+        <button onclick="document.getElementById('file-input').click()"
+                class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-brand-400 dark:hover:border-brand-600 hover:text-brand-500 dark:hover:text-brand-400 transition-all text-sm font-medium group">
+            <i class="fa-solid fa-folder-open group-hover:scale-110 transition-transform text-base"></i>
+            Open Lottie file
+        </button>
+    </div>
+
+</div>
+
+<!-- Footer -->
+<p class="mt-5 text-xs text-gray-400 dark:text-gray-600 text-center">
+    Powered by <a href="https://airbnb.io/lottie" class="hover:text-brand-400 underline transition-colors" target="_blank">Lottie Web</a>
+    &nbsp;·&nbsp; Drag &amp; drop or click to open any Lottie <code class="font-mono">.json</code>
+</p>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept=".json" class="hidden" onchange="loadFile(this.files[0])" />
+
+<script>
+    // ─── State ───────────────────────────────────────────────
+    let anim = null;
+    let isPlaying = false;
+    let loopEnabled = true;
+    let currentSpeed = 1;
+    let rafId = null;
+    const SPEED_MIN = 0.1, SPEED_MAX = 4;
+
+    // ─── Theme ───────────────────────────────────────────────
+    const root = document.documentElement;
+    const toggleBtn = document.getElementById('theme-toggle');
+    const thumb = document.getElementById('toggle-thumb');
+
+    function applyTheme(dark) {
+        if (dark) {
+            root.classList.add('dark');
+            thumb.style.transform = 'translateX(24px)';
+        } else {
+            root.classList.remove('dark');
+            thumb.style.transform = 'translateX(0)';
+        }
+        localStorage.setItem('lottie-theme', dark ? 'dark' : 'light');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        applyTheme(!root.classList.contains('dark'));
+    });
+
+    // Init theme
+    const saved = localStorage.getItem('lottie-theme');
+    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        applyTheme(true);
+    }
+
+    // ─── Drag & Drop ─────────────────────────────────────────
+    const dropZone = document.getElementById('drop-zone');
+    const body = document.body;
+
+    ['dragenter','dragover'].forEach(ev => {
+        body.addEventListener(ev, e => {
+            e.preventDefault();
+            dropZone.classList.add('drop-active');
+        });
+    });
+
+    ['dragleave','dragend'].forEach(ev => {
+        body.addEventListener(ev, e => {
+            if (!e.relatedTarget || !body.contains(e.relatedTarget)) {
+                dropZone.classList.remove('drop-active');
+            }
+        });
+    });
+
+    body.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('drop-active');
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.json')) loadFile(file);
+    });
+
+    // ─── Load File ───────────────────────────────────────────
+    function loadFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const data = JSON.parse(e.target.result);
+                initAnimation(data, file.name);
+            } catch {
+                alert('Invalid Lottie JSON file.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function initAnimation(data, filename) {
+        if (anim) { anim.destroy(); cancelAnimationFrame(rafId); }
+
+        document.getElementById('drop-zone').classList.add('hidden');
+        const container = document.getElementById('lottie-container');
+        container.innerHTML = '';
+        container.classList.remove('hidden');
+        document.getElementById('file-badge').classList.remove('hidden');
+        document.getElementById('change-btn').classList.remove('hidden');
+        document.getElementById('loop-badge').classList.remove('hidden');
+        document.getElementById('file-name-text').textContent = filename;
+
+        anim = lottie.loadAnimation({
+            container,
+            renderer: 'svg',
+            loop: loopEnabled,
+            autoplay: true,
+            animationData: data
+        });
+
+        anim.setSpeed(currentSpeed);
+        isPlaying = true;
+        updatePlayIcon();
+
+        const totalFrames = anim.totalFrames;
+        const fps = anim.frameRate;
+        const durationSec = totalFrames / fps;
+
+        document.getElementById('total-display').textContent = totalFrames;
+        document.getElementById('time-total').textContent = formatTime(durationSec);
+
+        updateLoopUI();
+        tickProgress();
+    }
+
+    // ─── Playback controls ───────────────────────────────────
+    function togglePlayPause() {
+        if (!anim) return;
+        if (isPlaying) { anim.pause(); isPlaying = false; }
+        else { anim.play(); isPlaying = true; }
+        updatePlayIcon();
+    }
+
+    function stopAnimation() {
+        if (!anim) return;
+        anim.stop(); isPlaying = false;
+        updatePlayIcon();
+        updateProgress(0);
+    }
+
+    function stepAnimation(frames) {
+        if (!anim) return;
+        const cur = anim.currentFrame;
+        const next = Math.max(0, Math.min(anim.totalFrames - 1, cur + frames));
+        anim.goToAndStop(next, true);
+        isPlaying = false;
+        updatePlayIcon();
+        updateProgress(next / (anim.totalFrames - 1) * 100);
+    }
+
+    function seekAnimation(val) {
+        if (!anim) return;
+        const frame = (val / 100) * (anim.totalFrames - 1);
+        anim.goToAndStop(frame, true);
+        isPlaying = false;
+        updatePlayIcon();
+        updateProgress(val);
+    }
+
+    function toggleLoop() {
+        loopEnabled = !loopEnabled;
+        if (anim) anim.loop = loopEnabled;
+        updateLoopUI();
+    }
+
+    function setSpeed(val) {
+        currentSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, val));
+        if (anim) anim.setSpeed(currentSpeed);
+        document.getElementById('speed-label').textContent = currentSpeed.toFixed(1) + '×';
+        document.getElementById('speed-range').value = currentSpeed;
+        const pct = ((currentSpeed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)) * 100;
+        document.getElementById('speed-fill').style.width = pct + '%';
+    }
+
+    // ─── UI updates ──────────────────────────────────────────
+    function updatePlayIcon() {
+        document.getElementById('play-icon').className =
+            isPlaying ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+    }
+
+    function updateLoopUI() {
+        const btn = document.getElementById('loop-btn');
+        const badge = document.getElementById('loop-badge-inner');
+        if (loopEnabled) {
+            btn.classList.add('text-brand-500', 'dark:text-brand-400');
+            btn.classList.remove('text-gray-500', 'dark:text-gray-400');
+            badge.classList.add('text-brand-500', 'dark:text-brand-400');
+            badge.classList.remove('text-gray-500', 'dark:text-gray-400');
+        } else {
+            btn.classList.remove('text-brand-500', 'dark:text-brand-400');
+            btn.classList.add('text-gray-500', 'dark:text-gray-400');
+            badge.classList.remove('text-brand-500', 'dark:text-brand-400');
+            badge.classList.add('text-gray-500', 'dark:text-gray-400');
+        }
+    }
+
+    function updateProgress(pct) {
+        pct = parseFloat(pct);
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('progress-range').value = pct;
+        if (anim) {
+            const frame = Math.round((pct / 100) * (anim.totalFrames - 1));
+            document.getElementById('frame-display').textContent = frame;
+            const fps = anim.frameRate;
+            const secs = frame / fps;
+            document.getElementById('time-current').textContent = formatTime(secs);
+        }
+    }
+
+    function tickProgress() {
+        if (!anim) return;
+        if (isPlaying) {
+            const pct = (anim.currentFrame / (anim.totalFrames - 1)) * 100;
+            updateProgress(pct);
+        }
+        rafId = requestAnimationFrame(tickProgress);
+    }
+
+    anim && anim.addEventListener('complete', () => {
+        if (!loopEnabled) { isPlaying = false; updatePlayIcon(); }
+    });
+
+    function formatTime(s) {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return m + ':' + String(sec).padStart(2, '0');
+    }
+
+    // Init speed fill
+    setSpeed(1);
+</script>
+</body>
+</html>
